@@ -36,16 +36,32 @@ jobs:
             echo "waiting for server..."; sleep 1;
           done
 
-      - name: Create output dir
-        run: mkdir -p out
-
-      - name: Run k6 load test (Docker) with web dashboard export
+      - name: Create output dir and set permissions
         run: |
-          docker run --rm --network host \
-            -e K6_WEB_DASHBOARD=true \
-            -e K6_WEB_DASHBOARD_EXPORT=html-report.html \
-            -v "${{ github.workspace }}:/scripts" -w /scripts \
-            grafana/k6 run --summary-export=out/summary.json test/k6/trabalho_k6.js
+          mkdir -p out
+          # pre-create HTML report file so Docker container can open/write it
+          touch html-report.html || true
+          # ensure container user can write to the output dir and report file
+          chmod -R a+rwX out
+          chmod a+rw html-report.html || true
+
+      - name: Install k6 on runner (Ubuntu)
+        run: |
+          # install prerequisites and add k6 apt repository
+          sudo apt-get update -y
+          sudo apt-get install -y gnupg ca-certificates curl apt-transport-https
+          curl -s https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -y
+          sudo apt-get install -y k6
+
+      - name: Run k6 load test (local runner) with web dashboard export
+        env:
+          K6_WEB_DASHBOARD: true
+          K6_WEB_DASHBOARD_EXPORT: html-report.html
+        run: |
+          # run k6 locally on the runner (same as local usage)
+          k6 run --summary-export=out/summary.json test/k6/trabalho_k6.js
 
       - name: Upload k6 summary
         uses: actions/upload-artifact@v4
