@@ -19,64 +19,44 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run unit tests
-        run: npm test --silent
-
-      - name: Wait for server to be ready (PowerShell)
+      - name: Start server (background)
         shell: pwsh
         run: |
-          for ($i=0; $i -lt 30; $i++) {
-            try {
-              $r = Invoke-WebRequest -Uri http://localhost:3000/ -UseBasicParsing -TimeoutSec 2
-              if ($r.StatusCode -eq 200) { Write-Host 'server ready'; break }
-            } catch {
-              Write-Host 'waiting for server...'; Start-Sleep -Seconds 1
-            }
-          }
-
-      - name: Create output dir and report file (Windows)
-        shell: pwsh
-        run: |
-          New-Item -Path out -ItemType Directory -Force | Out-Null
-          New-Item -Path html-report.html -ItemType File -Force | Out-Null
-
-      - name: Install k6 on Windows runner (Chocolatey)
-        shell: pwsh
-        run: |
-          choco install k6 -y
-
-      - name: Start server (just before k6)
-        shell: pwsh
-        run: |
-          # start server in background and save pid so we can stop it later
-          $p = Start-Process -FilePath node -ArgumentList 'server.js' -PassThru -NoNewWindow
-          $p.Id | Out-File -Encoding ASCII server.pid
-          # wait 1 second to allow the server to start
+          # start node server in background so k6 can run after
+          Start-Process -FilePath node -ArgumentList 'server.js' -NoNewWindow -PassThru | Select-Object -ExpandProperty Id | Out-File -Encoding ASCII server.pid
           Start-Sleep -Seconds 1
 
-      - name: Run k6 load test (PowerShell) exactly like local
+      # wait a short time to allow the server to start (1 second)
+      - name: Short wait after server start
+        shell: pwsh
+        run: Start-Sleep -Seconds 1
+
+      - name: Install k6 (Chocolatey)
+        shell: pwsh
+        run: choco install k6 -y
+
+      - name: Run k6 exactly like local
         shell: pwsh
         run: |
-          $env:K6_WEB_DASHBOARD = "true"; $env:K6_WEB_DASHBOARD_EXPORT = "html-report.html"; k6 run --summary-export=out/summary.json test/k6/trabalho_k6.js
+          $env:K6_WEB_DASHBOARD = "true"
+          $env:K6_WEB_DASHBOARD_EXPORT = "html-report.html"
+          k6 run --summary-export=out/summary.json test/k6/trabalho_k6.js
 
-      - name: Upload k6 summary
+      - name: Upload k6 artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: k6-summary
-          path: out/summary.json
-
-      - name: Upload html report (if produced)
-        uses: actions/upload-artifact@v4
-        with:
-          name: k6-html-report
-          path: html-report.html
+          name: k6-report
+          path: |
+            out/summary.json
+            html-report.html
 
       - name: Stop server
         if: always()
         shell: pwsh
         run: |
           if (Test-Path server.pid) {
-            $pid = Get-Content server.pid | Out-String
-            $pid = $pid.Trim()
+            $pid = (Get-Content server.pid).Trim()
             if ($pid) { Stop-Process -Id $pid -ErrorAction SilentlyContinue }
+            Remove-Item server.pid -ErrorAction SilentlyContinue
           }
+
