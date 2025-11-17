@@ -1,62 +1,56 @@
-name: CI
+name: K6 Performance Test
 
 on:
   push:
+    branches: [ "main" ]
   pull_request:
 
 jobs:
-  test:
-    runs-on: windows-latest
+  k6-test:
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      # 1. Checkout do código
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Setup Node.js (para rodar seu server.js)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: 18
 
+      # 3. Instalar dependências (se tiver package.json)
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Start server (background)
-        shell: pwsh
+      # 4. Subir o server.js em background
+      - name: Start server
         run: |
-          # start node server in background so k6 can run after
-          Start-Process -FilePath node -ArgumentList 'server.js' -NoNewWindow -PassThru | Select-Object -ExpandProperty Id | Out-File -Encoding ASCII server.pid
-          Start-Sleep -Seconds 1
+          nohup node server.js > server.log 2>&1 &
+          sleep 5
 
-      # wait a short time to allow the server to start (1 second)
-      - name: Short wait after server start
-        shell: pwsh
-        run: Start-Sleep -Seconds 1
-
-      - name: Install k6 (Chocolatey)
-        shell: pwsh
-        run: choco install k6 -y
-
-      - name: Run k6 exactly like local
-        shell: pwsh
+      # 5. Instalar o K6
+      - name: Install k6
         run: |
-          $env:K6_WEB_DASHBOARD = "true"
-          $env:K6_WEB_DASHBOARD_EXPORT = "html-report.html"
-          k6 run --summary-export=out/summary.json test/k6/trabalho_k6.js
+          sudo apt update
+          sudo apt install -y ca-certificates gnupg
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/k6.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt update
+          sudo apt install -y k6
 
-      - name: Upload k6 artifacts
+      # 6. Executar o teste K6 com variáveis como no Windows
+      - name: Run performance test
+        run: |
+          export K6_WEB_DASHBOARD=true
+          export K6_WEB_DASHBOARD_EXPORT=html-report.html
+          k6 run test/k6/trabalho_k6.js
+
+      # 7. Fazer upload do relatório HTML como artefato
+      - name: Upload report
         uses: actions/upload-artifact@v4
         with:
           name: k6-report
-          path: |
-            out/summary.json
-            html-report.html
-
-      - name: Stop server
-        if: always()
-        shell: pwsh
-        run: |
-          if (Test-Path server.pid) {
-            $pid = (Get-Content server.pid).Trim()
-            if ($pid) { Stop-Process -Id $pid -ErrorAction SilentlyContinue }
-            Remove-Item server.pid -ErrorAction SilentlyContinue
-          }
-
+          path: html-report.html
