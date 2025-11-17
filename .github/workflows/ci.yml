@@ -10,46 +10,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout do código
+      # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js (para rodar seu server.js)
+      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 3. Instalar dependências (se tiver package.json)
+      # 3. Instalar dependências
       - name: Install dependencies
         run: npm install
 
-      # 4. Subir o server.js em background
+      # 4. Iniciar server.js em background
       - name: Start server
         run: |
           nohup node server.js > server.log 2>&1 &
           sleep 5
 
-      # 5. Instalar o K6
-      - name: Install k6
+      # 5. Instalar K6 (versão mais nova diretamente do GitHub)
+      - name: Install k6 latest version
         run: |
-          sudo apt update
-          sudo apt install -y ca-certificates gnupg
-          sudo mkdir -p /etc/apt/keyrings
-          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/k6.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
-          sudo apt update
-          sudo apt install -y k6
+          curl -sSL https://github.com/grafana/k6/releases/latest/download/k6-v0.52.0-linux-amd64.tar.gz -o k6.tar.gz
+          tar -xzf k6.tar.gz
+          sudo mv k6-v*-linux-amd64/k6 /usr/local/bin/
+          k6 version
 
-      # 6. Executar o teste K6 com variáveis como no Windows
-      - name: Run performance test
+      # 6. Executar teste com export do dashboard
+      - name: Run K6 performance test
         run: |
           export K6_WEB_DASHBOARD=true
           export K6_WEB_DASHBOARD_EXPORT=html-report.html
           k6 run test/k6/trabalho_k6.js
 
-      # 7. Fazer upload do relatório HTML como artefato
-      - name: Upload report
+      # 7. Upload do relatório como artefato
+      - name: Upload K6 Report
         uses: actions/upload-artifact@v4
         with:
           name: k6-report
