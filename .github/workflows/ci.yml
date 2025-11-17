@@ -1,53 +1,28 @@
-name: K6 Performance Test
+name: k6-test
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
+on: [push]
 
 jobs:
   k6-test:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 3. Instalar dependências
       - name: Install dependencies
         run: npm install
 
-      # 4. Iniciar server.js em background
       - name: Start server
-        run: |
-          nohup node server.js > server.log 2>&1 &
-          sleep 5
+        run: nohup node server.js > server.log 2>&1 &
 
-      # 5. Instalar K6 (versão mais nova diretamente do GitHub)
-      - name: Install k6 latest version
-        run: |
-          curl -sSL https://github.com/grafana/k6/releases/latest/download/k6-v0.52.0-linux-amd64.tar.gz -o k6.tar.gz
-          tar -xzf k6.tar.gz
-          sudo mv k6-v*-linux-amd64/k6 /usr/local/bin/
-          k6 version
+      - name: Install k6
+        run: sudo apt-get update && sudo apt-get install -y k6
 
-      # 6. Executar teste com export do dashboard
-      - name: Run K6 performance test
-        run: |
-          export K6_WEB_DASHBOARD=true
-          export K6_WEB_DASHBOARD_EXPORT=html-report.html
-          k6 run test/k6/trabalho_k6.js
-
-      # 7. Upload do relatório como artefato
-      - name: Upload K6 Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: k6-report
-          path: html-report.html
+      - name: Run k6 tests
+        run: k6 run tests/k6/primeiro-script.js
