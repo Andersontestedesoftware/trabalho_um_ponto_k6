@@ -19,10 +19,14 @@ jobs:
         run: npm install
 
       - name: Start server
-        run: nohup node server.js > server.log 2>&1 &
+        run: |
+          nohup node server.js > server.log 2>&1 &
+          sleep 5
 
       - name: Install k6
         run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg ca-certificates
           curl -s https://dl.k6.io/key.gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/k6.gpg
           echo "deb [signed-by=/usr/share/keyrings/k6.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
           sudo apt-get update
@@ -30,3 +34,7 @@ jobs:
 
       - name: Run k6 tests
         run: k6 run test/k6/trabalho_k6.js
+
+      - name: Show server logs on failure
+        if: failure()
+        run: cat server.log
