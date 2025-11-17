@@ -29,4 +29,4 @@ jobs:
           sudo apt-get install -y k6
 
       - name: Run k6 tests
-        run: k6 run tests/k6/primeiro-script.js
+        run: k6 run test/k6/trabalho_k6.js
